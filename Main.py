@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import glob
 import matplotlib.pyplot as plt
-
+from moviepy.editor import VideoFileClip
 
 class CameraCalibration:
     def __init__(self, mtx, dist):
@@ -20,8 +20,14 @@ class Transformation:
 
     def transform(self, img):
         #img_size = (img.shape[1], img.shape[0])
+        # TODO: Store image resolution as global variable
         img_size = (1280, 720)
         return cv2.warpPerspective(img, self.matrix, img_size, flags=cv2.INTER_LINEAR)
+
+    def transform_inv(self, img):
+        #img_size = (img.shape[1], img.shape[0])
+        img_size = (1280, 720)
+        return cv2.warpPerspective(img, self.matrix_inv, img_size, flags=cv2.INTER_LINEAR)
 
 
 def print_calibration(calibration):
@@ -61,18 +67,18 @@ def calibrate_camera():
     return calibration
 
 
-def color_gradient_crop(img):
-    cropped = img[img.shape[0]//2:img.shape[0]]
+def color_gradient(img):
+    #cropped = img[img.shape[0]//2:img.shape[0]]
 
     # Convert to HLS color space and separate the S channel
     # Note: img is the undistorted image
-    hls = cv2.cvtColor(cropped, cv2.COLOR_RGB2HLS)
+    hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
     s_channel = hls[:, :, 2]
 
     # Grayscale image
     # NOTE: we already saw that standard grayscaling lost color information for the lane lines
     # Explore gradients in other colors spaces / color channels to see what might work better
-    gray = cv2.cvtColor(cropped, cv2.COLOR_RGB2GRAY)
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
     # Sobel x
     sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0)  # Take the derivative in x
@@ -86,7 +92,7 @@ def color_gradient_crop(img):
     sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
 
     # Threshold color channel
-    s_thresh_min = 170
+    s_thresh_min = 170 # 140
     s_thresh_max = 255
     s_binary = np.zeros_like(s_channel)
     s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
@@ -103,10 +109,10 @@ def color_gradient_crop(img):
 
 
 def perspective_transform():
-    #src = np.float32([[360, 200], [360, 1100], [85, 680], [85, 600]])
-    #dst = np.float32([[360, 200], [360, 1100], [0, 1100], [0, 200]])
-    src = np.float32([[200, 360], [1100, 360], [700, 100], [580, 100]])
-    dst = np.float32([[200, 720], [1100, 720], [1100, -260], [200, -260]])
+    #src = np.float32([[720, 200], [720, 1100], [100, 700], [100, 580]])
+    #dst = np.float32([[720, 200], [720, 1100], [0, 1100], [0, 200]])
+    src = np.float32([[200, 720], [1100, 720], [575, 440], [700, 440]])
+    dst = np.float32([[200, 720], [1100, 720], [200, 0], [1100, 0]])
 
     M = cv2.getPerspectiveTransform(src, dst)
     Minv = cv2.getPerspectiveTransform(dst, src)
@@ -232,20 +238,71 @@ def fit_polynomial(binary_warped):
     plt.plot(left_fitx, ploty, color='yellow')
     plt.plot(right_fitx, ploty, color='yellow')
 
-    return out_img
+    return ploty, left_fit, right_fit, left_fitx, right_fitx, out_img
+
+
+def measure_curvature_pixels(ploty, left_fit, right_fit):
+    y_eval = np.max(ploty)
+
+    a_left = left_fit[0]
+    b_left = left_fit[1]
+    a_right = right_fit[0]
+    b_right = right_fit[1]
+
+    left_curverad = (1 + (2 * a_left * y_eval + b_left) ** 2) ** (3 / 2) / np.abs(2 * a_left)
+    right_curverad = (1 + (2 * a_right * y_eval + b_right) ** 2) ** (3 / 2) / np.abs(2 * a_right)
+
+    return left_curverad, right_curverad
+
+
+def print_lane(undist, warped, ploty, left_fitx, right_fitx, transform):
+    # Create an image to draw the lines on
+    warp_zero = np.zeros_like(warped).astype(np.uint8)
+    color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+
+    # Recast the x and y points into usable format for cv2.fillPoly()
+    pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+    pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+    pts = np.hstack((pts_left, pts_right))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
+
+    # Warp the blank back to original image space using inverse perspective matrix (Minv)
+    new_warp = transform.transform_inv(color_warp)
+    #newwarp = cv2.warpPerspective(color_warp, Minv, (image.shape[1], image.shape[0]))
+    # Combine the result with the original image
+    result = cv2.addWeighted(undist, 1, new_warp, 0.3, 0)
+    return result
+    #cv2.imwrite('lane.jpg', result)
+
+
+def find_lane(img):
+    #test_img = cv2.imread('TestImages/test1.jpg')
+    undist = calibration.undistort(img)
+    combined_binary = color_gradient(undist)
+    #print_binary(combined_binary, 'color_and_gradient.jpg')
+
+    transform = perspective_transform()
+    warped_binary = transform.transform(combined_binary)
+    #print_binary(warped_binary, 'warped.jpg')
+
+    ploty, left_fit, right_fit, left_fitx, right_fitx, line_img = fit_polynomial(warped_binary)
+    #cv2.imwrite("polynom.jpg", line_img)
+    #left_curverad, right_curverad = measure_curvature_pixels(ploty, left_fit, right_fit)
+
+    #print('Left radius: {:.0f}m'.format(left_curverad))
+    #print('Right radius: {:.0f}m'.format(right_curverad))
+
+    lane_img = print_lane(undist, warped_binary, ploty, left_fitx, right_fitx, transform)
+    return lane_img
 
 
 calibration = calibrate_camera()
 #print_calibration(calibration)
 
-test_img = cv2.imread('TestImages/straight_lines1.jpg')
-undistorted = calibration.undistort(test_img)
-combined_binary = color_gradient_crop(undistorted)
-print_binary(combined_binary, 'color_and_gradient.jpg')
+input_video = VideoFileClip('project_video.mp4')
+output_video = input_video.fl_image(find_lane)
+output_video.write_videofile('output.mp4', audio=False)
 
-transform = perspective_transform()
-warped_binary = transform.transform(combined_binary)
-print_binary(warped_binary, 'warped.jpg')
-
-line_img = fit_polynomial(warped_binary)
-cv2.imwrite("polynom.jpg", line_img)
+# TODO: Sliding window improvement
