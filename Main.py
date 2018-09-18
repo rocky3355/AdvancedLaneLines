@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import glob
 import matplotlib.pyplot as plt
-from moviepy.editor import VideoFileClip
+#from moviepy.editor import VideoFileClip
 
 class CameraCalibration:
     def __init__(self, mtx, dist):
@@ -74,6 +74,7 @@ def color_gradient(img):
     # Note: img is the undistorted image
     hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
     s_channel = hls[:, :, 2]
+    h_channel = hls[:, :, 0]
 
     # Grayscale image
     # NOTE: we already saw that standard grayscaling lost color information for the lane lines
@@ -86,16 +87,22 @@ def color_gradient(img):
     scaled_sobel = np.uint8(255 * abs_sobelx / np.max(abs_sobelx))
 
     # Threshold x gradient
-    thresh_min = 20
-    thresh_max = 100
+    thresh_min = 50 #30
+    thresh_max = 100 #100
     sxbinary = np.zeros_like(scaled_sobel)
     sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
 
-    # Threshold color channel
-    s_thresh_min = 170 # 140
+    # Threshold saturation channel
+    s_thresh_min = 140 #140
     s_thresh_max = 255
     s_binary = np.zeros_like(s_channel)
     s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
+
+    # Threshold hue channel
+    h_thresh_min = 90 #90
+    h_thresh_max = 100 #100
+    h_binary = np.zeros_like(h_channel)
+    h_binary[(h_channel >= h_thresh_min) & (h_channel <= h_thresh_max)] = 1
 
     # Stack each channel to view their individual contributions in green and blue respectively
     # This returns a stack of the two binary images, whose components you can see as different colors
@@ -103,7 +110,8 @@ def color_gradient(img):
 
     # Combine the two binary thresholds
     combined_binary = np.zeros_like(sxbinary)
-    combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
+    #combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
+    combined_binary[(h_binary == 1) | (sxbinary == 1)] = 1
 
     return combined_binary
 
@@ -137,7 +145,7 @@ def find_lane_pixels(binary_warped):
     # Set the width of the windows +/- margin
     margin = 100
     # Set minimum number of pixels found to recenter window
-    minpix = 50
+    minpix = 25
 
     # Set height of windows - based on nwindows above and image shape
     window_height = np.int(binary_warped.shape[0] // nwindows)
@@ -165,10 +173,8 @@ def find_lane_pixels(binary_warped):
         win_xright_high = rightx_current + margin
 
         # Draw the windows on the visualization image
-        cv2.rectangle(out_img, (win_xleft_low, win_y_low),
-                      (win_xleft_high, win_y_high), (0, 255, 0), 2)
-        cv2.rectangle(out_img, (win_xright_low, win_y_low),
-                      (win_xright_high, win_y_high), (0, 255, 0), 2)
+        cv2.rectangle(out_img, (win_xleft_low, win_y_low), (win_xleft_high, win_y_high), (0, 255, 0), 2)
+        cv2.rectangle(out_img, (win_xright_low, win_y_low), (win_xright_high, win_y_high), (0, 255, 0), 2)
 
         ### TO-DO: Identify the nonzero pixels in x and y within the window ###
         good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
@@ -187,11 +193,12 @@ def find_lane_pixels(binary_warped):
         ### TO-DO: If you found > minpix pixels, recenter next window ###
         ### (`right` or `leftx_current`) on their mean position ###
         if len(good_left_inds) > minpix:
+            print('Length: {}'.format(len(good_left_inds)))
             leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
         if len(good_right_inds) > minpix:
             rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
 
-        pass  # Remove this when you add your function
+
 
     # Concatenate the arrays of indices (previously was a list of lists of pixels)
     try:
@@ -270,25 +277,24 @@ def print_lane(undist, warped, ploty, left_fitx, right_fitx, transform):
 
     # Warp the blank back to original image space using inverse perspective matrix (Minv)
     new_warp = transform.transform_inv(color_warp)
-    #newwarp = cv2.warpPerspective(color_warp, Minv, (image.shape[1], image.shape[0]))
+
     # Combine the result with the original image
     result = cv2.addWeighted(undist, 1, new_warp, 0.3, 0)
     return result
-    #cv2.imwrite('lane.jpg', result)
 
 
 def find_lane(img):
-    #test_img = cv2.imread('TestImages/test1.jpg')
+    img = cv2.imread('TestImages/test5.jpg')
     undist = calibration.undistort(img)
     combined_binary = color_gradient(undist)
-    #print_binary(combined_binary, 'color_and_gradient.jpg')
+    print_binary(combined_binary, 'color_and_gradient.jpg')
 
     transform = perspective_transform()
     warped_binary = transform.transform(combined_binary)
-    #print_binary(warped_binary, 'warped.jpg')
+    print_binary(warped_binary, 'warped.jpg')
 
     ploty, left_fit, right_fit, left_fitx, right_fitx, line_img = fit_polynomial(warped_binary)
-    #cv2.imwrite("polynom.jpg", line_img)
+    cv2.imwrite("polynom.jpg", line_img)
     #left_curverad, right_curverad = measure_curvature_pixels(ploty, left_fit, right_fit)
 
     #print('Left radius: {:.0f}m'.format(left_curverad))
@@ -300,6 +306,9 @@ def find_lane(img):
 
 calibration = calibrate_camera()
 #print_calibration(calibration)
+lane_img = find_lane(None)
+cv2.imwrite('lane.jpg', lane_img)
+exit(0)
 
 input_video = VideoFileClip('project_video.mp4')
 output_video = input_video.fl_image(find_lane)
