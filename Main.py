@@ -73,8 +73,13 @@ def color_gradient(img):
     # Convert to HLS color space and separate the S channel
     # Note: img is the undistorted image
     hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
-    s_channel = hls[:, :, 2]
     h_channel = hls[:, :, 0]
+    s_channel = hls[:, :, 2]
+
+    s_channel *= 2
+    #rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB)
+    #cv2.imwrite('color.jpg', rgb)
+    #exit(0)
 
     # Grayscale image
     # NOTE: we already saw that standard grayscaling lost color information for the lane lines
@@ -87,19 +92,19 @@ def color_gradient(img):
     scaled_sobel = np.uint8(255 * abs_sobelx / np.max(abs_sobelx))
 
     # Threshold x gradient
-    thresh_min = 50 #30
+    thresh_min = 20 #30
     thresh_max = 100 #100
     sxbinary = np.zeros_like(scaled_sobel)
     sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
 
     # Threshold saturation channel
-    s_thresh_min = 140 #140
-    s_thresh_max = 255
+    s_thresh_min = 170 #140
+    s_thresh_max = 240
     s_binary = np.zeros_like(s_channel)
     s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
 
     # Threshold hue channel
-    h_thresh_min = 90 #90
+    h_thresh_min = 50 #90
     h_thresh_max = 100 #100
     h_binary = np.zeros_like(h_channel)
     h_binary[(h_channel >= h_thresh_min) & (h_channel <= h_thresh_max)] = 1
@@ -111,7 +116,7 @@ def color_gradient(img):
     # Combine the two binary thresholds
     combined_binary = np.zeros_like(sxbinary)
     #combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
-    combined_binary[(h_binary == 1) | (sxbinary == 1)] = 1
+    combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
 
     return combined_binary
 
@@ -161,6 +166,10 @@ def find_lane_pixels(binary_warped):
     left_lane_inds = []
     right_lane_inds = []
 
+    # TODO
+    average_shift_left = 0
+    average_shift_right = 0
+
     # Step through the windows one by one
     for window in range(nwindows):
         # Identify window boundaries in x and y (and right and left)
@@ -193,10 +202,16 @@ def find_lane_pixels(binary_warped):
         ### TO-DO: If you found > minpix pixels, recenter next window ###
         ### (`right` or `leftx_current`) on their mean position ###
         if len(good_left_inds) > minpix:
-            print('Length: {}'.format(len(good_left_inds)))
+            #print('Length: {}'.format(len(good_left_inds)))
             leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+        else:
+            leftx_current += average_shift_left
+            print('Apply last left')
         if len(good_right_inds) > minpix:
             rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+        else:
+            rightx_current += average_shift_right
+            print('Apply last right')
 
 
 
