@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 import glob
 import matplotlib.pyplot as plt
-#from moviepy.editor import VideoFileClip
+from moviepy.editor import VideoFileClip
 
 class CameraCalibration:
     def __init__(self, mtx, dist):
@@ -73,12 +73,13 @@ def color_gradient(img):
     # Convert to HLS color space and separate the S channel
     # Note: img is the undistorted image
     hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
-    h_channel = hls[:, :, 0]
+    l_channel = hls[:, :, 1]
     s_channel = hls[:, :, 2]
 
-    s_channel *= 2
-    #rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB)
-    #cv2.imwrite('color.jpg', rgb)
+    s_channel = np.multiply(s_channel, 1.8)
+    #s_channel *= 2
+    rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB)
+    cv2.imwrite('color.jpg', rgb)
     #exit(0)
 
     # Grayscale image
@@ -99,15 +100,15 @@ def color_gradient(img):
 
     # Threshold saturation channel
     s_thresh_min = 170 #140
-    s_thresh_max = 240
+    s_thresh_max = 255
     s_binary = np.zeros_like(s_channel)
     s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
 
     # Threshold hue channel
-    h_thresh_min = 50 #90
-    h_thresh_max = 100 #100
-    h_binary = np.zeros_like(h_channel)
-    h_binary[(h_channel >= h_thresh_min) & (h_channel <= h_thresh_max)] = 1
+    l_thresh_min = 50
+    l_thresh_max = 255
+    l_binary = np.zeros_like(l_channel)
+    l_binary[(l_channel >= l_thresh_min) & (l_channel <= l_thresh_max)] = 1
 
     # Stack each channel to view their individual contributions in green and blue respectively
     # This returns a stack of the two binary images, whose components you can see as different colors
@@ -116,7 +117,7 @@ def color_gradient(img):
     # Combine the two binary thresholds
     combined_binary = np.zeros_like(sxbinary)
     #combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
-    combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
+    combined_binary[(l_binary == 1) & ((s_binary == 1) | (sxbinary == 1))] = 1
 
     return combined_binary
 
@@ -124,7 +125,7 @@ def color_gradient(img):
 def perspective_transform():
     #src = np.float32([[720, 200], [720, 1100], [100, 700], [100, 580]])
     #dst = np.float32([[720, 200], [720, 1100], [0, 1100], [0, 200]])
-    src = np.float32([[200, 720], [1100, 720], [575, 440], [700, 440]])
+    src = np.float32([[200, 720], [1100, 720], [575, 450], [700, 450]])
     dst = np.float32([[200, 720], [1100, 720], [200, 0], [1100, 0]])
 
     M = cv2.getPerspectiveTransform(src, dst)
@@ -204,14 +205,14 @@ def find_lane_pixels(binary_warped):
         if len(good_left_inds) > minpix:
             #print('Length: {}'.format(len(good_left_inds)))
             leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
-        else:
-            leftx_current += average_shift_left
-            print('Apply last left')
+        #else:
+            #leftx_current += average_shift_left
+            #print('Apply last left')
         if len(good_right_inds) > minpix:
             rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
-        else:
-            rightx_current += average_shift_right
-            print('Apply last right')
+        #else:
+            #rightx_current += average_shift_right
+            #print('Apply last right')
 
 
 
@@ -299,7 +300,7 @@ def print_lane(undist, warped, ploty, left_fitx, right_fitx, transform):
 
 
 def find_lane(img):
-    img = cv2.imread('TestImages/test5.jpg')
+    #img = cv2.imread('TestImages/test6.jpg')
     undist = calibration.undistort(img)
     combined_binary = color_gradient(undist)
     print_binary(combined_binary, 'color_and_gradient.jpg')
@@ -321,11 +322,11 @@ def find_lane(img):
 
 calibration = calibrate_camera()
 #print_calibration(calibration)
-lane_img = find_lane(None)
-cv2.imwrite('lane.jpg', lane_img)
-exit(0)
+#lane_img = find_lane(None)
+#cv2.imwrite('lane.jpg', lane_img)
+#exit(0)
 
-input_video = VideoFileClip('project_video.mp4')
+input_video = VideoFileClip('Videos/harder_challenge_video.mp4')
 output_video = input_video.fl_image(find_lane)
 output_video.write_videofile('output.mp4', audio=False)
 
