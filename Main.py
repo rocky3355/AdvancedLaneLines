@@ -4,6 +4,8 @@ import glob
 import matplotlib.pyplot as plt
 from moviepy.editor import VideoFileClip
 
+PRINT_STAGES = False
+
 class CameraCalibration:
     def __init__(self, mtx, dist):
         self.mtx = mtx
@@ -31,7 +33,6 @@ class Transformation:
 
 
 def print_calibration(calibration):
-    # TODO: Also do for TestImages/straight_lines1.jpg
     img = cv2.imread("CameraCalibration/calibration1.jpg")
     undist = calibration.undistort_image(img)
     cv2.imwrite("test.jpg", undist)
@@ -77,10 +78,9 @@ def color_gradient(img):
     s_channel = hls[:, :, 2]
 
     s_channel = np.multiply(s_channel, 1.8)
-    #s_channel *= 2
-    rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB)
-    cv2.imwrite('color.jpg', rgb)
-    #exit(0)
+    if PRINT_STAGES:
+        rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB)
+        cv2.imwrite('color.jpg', rgb)
 
     # Grayscale image
     # NOTE: we already saw that standard grayscaling lost color information for the lane lines
@@ -135,11 +135,9 @@ def perspective_transform():
 
 
 def find_lane_pixels(binary_warped):
+    out_img = None
     # Take a histogram of the bottom half of the image
     histogram = np.sum(binary_warped[binary_warped.shape[0] // 2:, :], axis=0)
-    # Create an output image to draw on and visualize the result
-    out_img = np.dstack((binary_warped, binary_warped, binary_warped))
-    # Find the peak of the left and right halves of the histogram
     # These will be the starting point for the left and right lines
     midpoint = np.int(histogram.shape[0] // 2)
     leftx_base = np.argmax(histogram[:midpoint])
@@ -182,9 +180,12 @@ def find_lane_pixels(binary_warped):
         win_xright_low = rightx_current - margin
         win_xright_high = rightx_current + margin
 
-        # Draw the windows on the visualization image
-        cv2.rectangle(out_img, (win_xleft_low, win_y_low), (win_xleft_high, win_y_high), (0, 255, 0), 2)
-        cv2.rectangle(out_img, (win_xright_low, win_y_low), (win_xright_high, win_y_high), (0, 255, 0), 2)
+        if PRINT_STAGES:
+            out_img = np.dstack((binary_warped, binary_warped, binary_warped))
+            # Find the peak of the left and right halves of the histogram
+            # Draw the windows on the visualization image
+            cv2.rectangle(out_img, (win_xleft_low, win_y_low), (win_xleft_high, win_y_high), (0, 255, 0), 2)
+            cv2.rectangle(out_img, (win_xright_low, win_y_low), (win_xright_high, win_y_high), (0, 255, 0), 2)
 
         ### TO-DO: Identify the nonzero pixels in x and y within the window ###
         good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
@@ -252,14 +253,13 @@ def fit_polynomial(binary_warped):
         left_fitx = 1 * ploty ** 2 + 1 * ploty
         right_fitx = 1 * ploty ** 2 + 1 * ploty
 
-    ## Visualization ##
-    # Colors in the left and right lane regions
-    out_img[lefty, leftx] = [255, 0, 0]
-    out_img[righty, rightx] = [0, 0, 255]
-
-    # Plots the left and right polynomials on the lane lines
-    plt.plot(left_fitx, ploty, color='yellow')
-    plt.plot(right_fitx, ploty, color='yellow')
+    if PRINT_STAGES:
+        # Colors in the left and right lane regions
+        out_img[lefty, leftx] = [255, 0, 0]
+        out_img[righty, rightx] = [0, 0, 255]
+        # Plots the left and right polynomials on the lane lines
+        plt.plot(left_fitx, ploty, color='yellow')
+        plt.plot(right_fitx, ploty, color='yellow')
 
     return ploty, left_fit, right_fit, left_fitx, right_fitx, out_img
 
@@ -303,14 +303,17 @@ def find_lane(img):
     #img = cv2.imread('TestImages/test6.jpg')
     undist = calibration.undistort(img)
     combined_binary = color_gradient(undist)
-    print_binary(combined_binary, 'color_and_gradient.jpg')
+    if PRINT_STAGES:
+        print_binary(combined_binary, 'color_and_gradient.jpg')
 
     transform = perspective_transform()
     warped_binary = transform.transform(combined_binary)
-    print_binary(warped_binary, 'warped.jpg')
+    if PRINT_STAGES:
+        print_binary(warped_binary, 'warped.jpg')
 
     ploty, left_fit, right_fit, left_fitx, right_fitx, line_img = fit_polynomial(warped_binary)
-    cv2.imwrite("polynom.jpg", line_img)
+    if PRINT_STAGES:
+        cv2.imwrite("polynom.jpg", line_img)
     #left_curverad, right_curverad = measure_curvature_pixels(ploty, left_fit, right_fit)
 
     #print('Left radius: {:.0f}m'.format(left_curverad))
@@ -326,7 +329,7 @@ calibration = calibrate_camera()
 #cv2.imwrite('lane.jpg', lane_img)
 #exit(0)
 
-input_video = VideoFileClip('Videos/harder_challenge_video.mp4')
+input_video = VideoFileClip('Videos/project_video.mp4')
 output_video = input_video.fl_image(find_lane)
 output_video.write_videofile('output.mp4', audio=False)
 
