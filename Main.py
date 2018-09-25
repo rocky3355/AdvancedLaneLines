@@ -1,10 +1,12 @@
-import numpy as np
 import cv2
 import glob
+import numpy as np
 import matplotlib.pyplot as plt
 from moviepy.editor import VideoFileClip
 
-PRINT_STAGES = True
+
+PRINT_STAGES = False
+
 
 class CameraCalibration:
     def __init__(self, mtx, dist):
@@ -67,19 +69,18 @@ def calibrate_camera():
 
 def color_gradient(img):
     # Convert to HLS color space and separate the S channel
-    hls = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
+    hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
     l_channel = hls[:, :, 1]
     s_channel = hls[:, :, 2]
 
+    # Brighten up the colors
     s_channel = np.multiply(s_channel, 1.8)
+
     if PRINT_STAGES:
         rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB)
         cv2.imwrite('color.jpg', rgb)
 
-    # Grayscale image
-    # NOTE: we already saw that standard grayscaling lost color information for the lane lines
-    # Explore gradients in other colors spaces / color channels to see what might work better
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
     # Sobel x
     sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0)  # Take the derivative in x
@@ -104,10 +105,6 @@ def color_gradient(img):
     l_binary = np.zeros_like(l_channel)
     l_binary[(l_channel >= l_thresh_min) & (l_channel <= l_thresh_max)] = 1
 
-    # Stack each channel to view their individual contributions in green and blue respectively
-    # This returns a stack of the two binary images, whose components you can see as different colors
-    #color_binary = np.dstack((np.zeros_like(sxbinary), sxbinary, s_binary)) * 255
-
     # Combine the two binary thresholds
     combined_binary = np.zeros_like(sxbinary)
     combined_binary[(l_binary == 1) & ((s_binary == 1) | (sxbinary == 1))] = 1
@@ -116,6 +113,7 @@ def color_gradient(img):
 
 
 def perspective_transform():
+    # Transform the lane (trapezoid shape) to a rectangle
     src = np.float32([[200, 720], [1100, 720], [575, 450], [700, 450]])
     dst = np.float32([[200, 720], [1100, 720], [200, 0], [1100, 0]])
 
@@ -132,45 +130,42 @@ def find_lane_pixels(binary_warped):
 
     # Take a histogram of the bottom half of the image
     histogram = np.sum(binary_warped[binary_warped.shape[0] // 2:, :], axis=0)
-    # These will be the starting point for the left and right lines
+
+    # Starting points for the left and right lines
     midpoint = np.int(histogram.shape[0] // 2)
     leftx_base = np.argmax(histogram[:midpoint])
     rightx_base = np.argmax(histogram[midpoint:]) + midpoint
 
     # HYPERPARAMETERS
-    # Choose the number of sliding windows
     nwindows = 9
-    # Set the width of the windows +/- margin
     margin = 100
-    # Set minimum number of pixels found to recenter window
     minpix = 25
 
     # Set height of windows - based on nwindows above and image shape
     window_height = np.int(binary_warped.shape[0] // nwindows)
+
     # Identify the x and y positions of all nonzero pixels in the image
     nonzero = binary_warped.nonzero()
     nonzeroy = np.array(nonzero[0])
     nonzerox = np.array(nonzero[1])
-    # Current positions to be updated later for each window in nwindows
+
+    left_lane_inds = []
+    right_lane_inds = []
     leftx_current = leftx_base
     rightx_current = rightx_base
 
-    # Create empty lists to receive left and right lane pixel indices
-    left_lane_inds = []
-    right_lane_inds = []
-
-    # Step through the windows one by one
     for window in range(nwindows):
         # Identify window boundaries in x and y (and right and left)
         win_y_low = binary_warped.shape[0] - (window + 1) * window_height
         win_y_high = binary_warped.shape[0] - window * window_height
-        ### TO-DO: Find the four below boundaries of the window ###
+
+        # Find the four below boundaries of the window ###
         win_xleft_low = leftx_current - margin
         win_xleft_high = leftx_current + margin
         win_xright_low = rightx_current - margin
         win_xright_high = rightx_current + margin
 
-        ### TO-DO: Identify the nonzero pixels in x and y within the window ###
+        # Identify the nonzero pixels in x and y within the window ###
         good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
                           (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
         good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
@@ -183,10 +178,6 @@ def find_lane_pixels(binary_warped):
             cv2.rectangle(out_img, (win_xright_low, win_y_low), (win_xright_high, win_y_high), (0, 255, 0), 2)
 
         # Append these indices to the lists
-
-        # TODO: Only add the center of mass instead of all pixels?
-        #       Those centers should be sufficient for polyline fitting
-
         left_lane_inds.append(good_left_inds)
         right_lane_inds.append(good_right_inds)
 
@@ -194,8 +185,6 @@ def find_lane_pixels(binary_warped):
             leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
         if len(good_right_inds) > minpix:
             rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
-
-
 
     # Concatenate the arrays of indices (previously was a list of lists of pixels)
     try:
@@ -216,9 +205,9 @@ def find_lane_pixels(binary_warped):
 
 def fit_polynomial(binary_warped):
     # Find our lane pixels first
-    leftx, lefty, rightx, righty, out_img = search_around_poly(binary_warped)
+    leftx, lefty, rightx, righty, out_img = find_lane_pixels(binary_warped)
 
-    ### TO-DO: Fit a second order polynomial to each using `np.polyfit` ###
+    # Fit a second order polynomial
     left_fit = np.polyfit(lefty, leftx, 2)
     right_fit = np.polyfit(righty, rightx, 2)
 
@@ -250,84 +239,6 @@ def fit_polynomial(binary_warped):
     return ploty, left_fit, right_fit, left_fitx, right_fitx
 
 
-def fit_poly(img_shape, leftx, lefty, rightx, righty):
-    ### TO-DO: Fit a second order polynomial to each with np.polyfit() ###
-    left_fit = np.polyfit(lefty, leftx, 2)
-    right_fit = np.polyfit(righty, rightx, 2)
-    # Generate x and y values for plotting
-    ploty = np.linspace(0, img_shape[0] - 1, img_shape[0])
-    ### TO-DO: Calc both polynomials using ploty, left_fit and right_fit ###
-    left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
-    right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
-
-    return left_fitx, right_fitx, ploty
-
-
-def search_around_poly(binary_warped):
-    # HYPERPARAMETER
-    # Choose the width of the margin around the previous polynomial to search
-    # The quiz grader expects 100 here, but feel free to tune on your own!
-    margin = 100
-
-    # Grab activated pixels
-    nonzero = binary_warped.nonzero()
-    nonzeroy = np.array(nonzero[0])
-    nonzerox = np.array(nonzero[1])
-
-    ### TO-DO: Set the area of search based on activated x-values ###
-    ### within the +/- margin of our polynomial function ###
-    ### Hint: consider the window areas for the similarly named variables ###
-    ### in the previous quiz, but change the windows to our new search area ###
-    left_lane_inds = ((nonzerox > (left_fit[0] * (nonzeroy ** 2) + left_fit[1] * nonzeroy +
-                                   left_fit[2] - margin)) & (nonzerox < (left_fit[0] * (nonzeroy ** 2) +
-                                                                         left_fit[1] * nonzeroy + left_fit[
-                                                                             2] + margin)))
-    right_lane_inds = ((nonzerox > (right_fit[0] * (nonzeroy ** 2) + right_fit[1] * nonzeroy +
-                                    right_fit[2] - margin)) & (nonzerox < (right_fit[0] * (nonzeroy ** 2) +
-                                                                           right_fit[1] * nonzeroy + right_fit[
-                                                                               2] + margin)))
-
-    # Again, extract left and right line pixel positions
-    leftx = nonzerox[left_lane_inds]
-    lefty = nonzeroy[left_lane_inds]
-    rightx = nonzerox[right_lane_inds]
-    righty = nonzeroy[right_lane_inds]
-
-    # Fit new polynomials
-    left_fitx, right_fitx, ploty = fit_poly(binary_warped.shape, leftx, lefty, rightx, righty)
-
-    ## Visualization ##
-    # Create an image to draw on and an image to show the selection window
-    out_img = np.dstack((binary_warped, binary_warped, binary_warped)) * 255
-    window_img = np.zeros_like(out_img)
-    # Color in left and right line pixels
-    out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-    out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-
-    # Generate a polygon to illustrate the search window area
-    # And recast the x and y points into usable format for cv2.fillPoly()
-    left_line_window1 = np.array([np.transpose(np.vstack([left_fitx - margin, ploty]))])
-    left_line_window2 = np.array([np.flipud(np.transpose(np.vstack([left_fitx + margin,
-                                                                    ploty])))])
-    left_line_pts = np.hstack((left_line_window1, left_line_window2))
-    right_line_window1 = np.array([np.transpose(np.vstack([right_fitx - margin, ploty]))])
-    right_line_window2 = np.array([np.flipud(np.transpose(np.vstack([right_fitx + margin,
-                                                                     ploty])))])
-    right_line_pts = np.hstack((right_line_window1, right_line_window2))
-
-    # Draw the lane onto the warped blank image
-    #cv2.fillPoly(window_img, np.int_([left_line_pts]), (0, 255, 0))
-    #cv2.fillPoly(window_img, np.int_([right_line_pts]), (0, 255, 0))
-    #result = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
-
-    # Plot the polynomial lines onto the image
-    plt.plot(left_fitx, ploty, color='yellow')
-    plt.plot(right_fitx, ploty, color='yellow')
-    ## End visualization steps ##
-
-    return result
-
-
 def measure_curvature_pixels(ploty, left_fit, right_fit):
     y_eval = np.max(ploty)
 
@@ -336,10 +247,10 @@ def measure_curvature_pixels(ploty, left_fit, right_fit):
     a_right = right_fit[0]
     b_right = right_fit[1]
 
-    left_curverad = (1 + (2 * a_left * y_eval + b_left) ** 2) ** (3 / 2) / np.abs(2 * a_left)
-    right_curverad = (1 + (2 * a_right * y_eval + b_right) ** 2) ** (3 / 2) / np.abs(2 * a_right)
+    left_radius = (1 + (2 * a_left * y_eval + b_left) ** 2) ** (3 / 2) / np.abs(2 * a_left)
+    right_radius = (1 + (2 * a_right * y_eval + b_right) ** 2) ** (3 / 2) / np.abs(2 * a_right)
 
-    return left_curverad, right_curverad
+    return left_radius, right_radius
 
 
 def print_lane(undist, warped, ploty, left_fitx, right_fitx, transform):
@@ -364,36 +275,43 @@ def print_lane(undist, warped, ploty, left_fitx, right_fitx, transform):
 
 
 def find_lane(img):
-    img = cv2.imread('TestImages/test2.jpg')
+    # Undistort the image
     undist = calibration.undistort(img)
+
+    # Filter the image by gradient and color
     combined_binary = color_gradient(undist)
     if PRINT_STAGES:
         print_binary(combined_binary, 'filtered.jpg')
 
+    # Warp the image to the bird's eye view
     transform = perspective_transform()
     warped_binary = transform.transform(combined_binary)
     if PRINT_STAGES:
         print_binary(warped_binary, 'warped.jpg')
 
-    ploty, left_fit, right_fit, left_fitx, right_fitx, line_img = fit_polynomial(warped_binary)
+    # Find the lines
+    ploty, left_fit, right_fit, left_fitx, right_fitx = fit_polynomial(warped_binary)
 
-    #left_curverad, right_curverad = measure_curvature_pixels(ploty, left_fit, right_fit)
-    #print('Left radius: {:.0f}m'.format(left_curverad))
-    #print('Right radius: {:.0f}m'.format(right_curverad))
-
+    # Draw the lane onto the image
     lane_img = print_lane(undist, warped_binary, ploty, left_fitx, right_fitx, transform)
+
+    # Calculate the line radii
+    #left_radius, right_radius = measure_curvature_pixels(ploty, left_fit, right_fit)
+    #print('Left radius: {:.0f}m, Right radius: {:.0f}m'.format(left_radius, right_radius))
+
     return lane_img
 
 
+
+# ----- MAIN CODE -----
+
+# Calibrate the camera
 calibration = calibrate_camera()
 if PRINT_STAGES:
     print_calibration(calibration)
-lane_img = find_lane(None)
-cv2.imwrite('lane.jpg', lane_img)
-exit(0)
-
+# Load the video
 input_video = VideoFileClip('Videos/project_video.mp4')
+# Apply the lane finding algorithm to each frame
 output_video = input_video.fl_image(find_lane)
+# Save the video
 output_video.write_videofile('output.mp4', audio=False)
-
-# TODO: Sliding window improvement
