@@ -20,7 +20,7 @@ All lenses inflict distortions to images, thus the first step is to find the cam
 In order to find the lines the images have to be filtered by several ciriteria. The first filter uses the Sobel operator in order to compute the gradients between the pixels, effectively finding edges within the image. The second and third filter are using color attributes. Therefore, the image gets converted from the usual RGB color space to the HLS color space, HLS tries to represent the colors more like the human eye recognizes them, making it a better choice than RGB for color detection matters. The saturation, as well as the lightness channels are being used to detect the colors yellow and white within the image. For a better detection of yellow lines in dark spots (i.e. shadows from trees) the S-channel gets multiplied by a certain value. The downside is that, for example, the sky now also gets detected by the filter. The good thing is that only the lower half of the image will be used for the line detection.
 ![](filtered.jpg)
 
-##### 3. Perspectice transformation
+##### 3. Perspective transformation
 In order to calculate any curvature or polynomials, the lines need to be warped to a bird's view perspective. This way it is more easy for algorithms to detect the direction of the lines. A trapezoid quad that includes the main part of the lane is used together with OpenCV to warp this part of the image onto a rectangular shape.
 ![](warped.jpg)
 
@@ -36,4 +36,4 @@ Finally, the lane can be drawn onto the undistorted input image. The output of t
 ![](lane.jpg)
 
 ## 2. Discussion
-For the project video the algorithm works pretty well. I also tried to find the lanes for the two challenge videos, but the results were rather bad. One issue is that the asphalt is brighter, making the yellow lines hard to detect, even for the human eye. Another difficulty is the curvy road in the harder challenge video. The perspective transformation has been set up for either straight lanes or only slight curves. For sharp curves, a smaller portion of the binary image has to be warped to bird's eye view. Thus the parameters for waping would have to dynamic, not static.
+For the project video the algorithm works pretty well. I also tried to find the lanes for the two challenge videos, but the results were rather bad. One issue is that the asphalt is brighter, making the yellow lines hard to detect, even for the human eye. Another difficulty is the curvy road in the harder challenge video. The perspective transformation has been set up for either straight lanes or only slight curves. For sharp curves, a smaller portion of the binary image has to be warped to bird's eye view. Thus the parameters for waping would have to be dynamic, not static.
