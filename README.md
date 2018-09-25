@@ -32,7 +32,7 @@ Numpy is used to fit polynomials onto the found line pixels. This helps to predi
 ![](polynom.jpg)
 
 ##### 6. Drawing the lane
-Finally, the lane can be drawn onto the undistorted input image. The output of the project_video.mp4 can be found in output.mp4.
+Finally, the lane can be drawn onto the undistorted input image. The output of the *project_video.mp4* can be found in *output.mp4*. The line radii for each frame can be printed by uncommenting the lines 299 and 300.
 ![](lane.jpg)
 
 ## 2. Discussion
