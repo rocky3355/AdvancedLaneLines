@@ -13,7 +13,7 @@ The pipeline from an input image to the output image with the drawn lane on it i
 
 ##### 1. Camera calibration
 All lenses inflict distortions to images, thus the first step is to find the camera parameters in order to undistort the images. Therefore, several images of chessboard patterns are used, OpenCV can then create the camera matrix by providing the "real world" points for each image. OpenCV detects the corresponding image points automatically. This procedure has to be done only once, the parameters can be used for all further images. Below you can see an example of an chessboard pattern that gets undistorted.
-![](CameraCalibration/calibration1.jpg = 200x200)
+![](CameraCalibration/calibration1.jpg)
 ![](undistorted.jpg "Undistorted")
 
 ##### 2. Filtering
