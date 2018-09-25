@@ -13,8 +13,7 @@ The pipeline from an input image to the output image with the drawn lane on it i
 
 ##### 1. Camera calibration
 All lenses inflict distortions to images, thus the first step is to find the camera parameters in order to undistort the images. Therefore, several images of chessboard patterns are used, OpenCV can then create the camera matrix by providing the "real world" points for each image. OpenCV detects the corresponding image points automatically. This procedure has to be done only once, the parameters can be used for all further images. Below you can see an example of an chessboard pattern that gets undistorted.
-![](CameraCalibration/calibration1.jpg)
-![](undistorted.jpg "Undistorted")
+![](CameraCalibration/calibration1.jpg) ![](undistorted.jpg "Undistorted")
 
 ##### 2. Filtering
 In order to find the lines the images have to be filtered by several ciriteria. The first filter uses the Sobel operator in order to compute the gradients between the pixels, effectively finding edges within the image. The second and third filter are using color attributes. Therefore, the image gets converted from the usual RGB color space to the HLS color space, HLS tries to represent the colors more like the human eye recognizes them, making it a better choice than RGB for color detection matters. The saturation, as well as the lightness channels are being used to detect the colors yellow and white within the image. For a better detection of yellow lines in dark spots (i.e. shadows from trees) the S-channel gets multiplied by a certain value. The downside is that, for example, the sky now also gets detected by the filter. The good thing is that only the lower half of the image will be used for the line detection.
