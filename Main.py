@@ -1,11 +1,21 @@
+import os
 import cv2
 import glob
 import numpy as np
+from PIL import Image
+from PIL import ImageFont
+from PIL import ImageDraw
 import matplotlib.pyplot as plt
 from moviepy.editor import VideoFileClip
 
 
 PRINT_STAGES = False
+IMAGE_FOLDER = 'OutputImages'
+TEXT_FONT = ImageFont.truetype('Fonts/Arial.ttf', 25)
+TEXT_COLOR = (255, 255, 255)
+LANE_WIDTH_M = 3.7
+MY = 20.0 / 720.0
+MX = LANE_WIDTH_M / 900.0
 
 
 class CameraCalibration:
@@ -34,7 +44,7 @@ class Transformation:
 def print_calibration(calibration):
     img = cv2.imread("CameraCalibration/calibration1.jpg")
     undist = calibration.undistort(img)
-    cv2.imwrite("undistorted.jpg", undist)
+    cv2.imwrite(os.path.join(IMAGE_FOLDER, 'undistorted.jpg'), undist)
 
 
 def print_binary(img, file_name):
@@ -78,7 +88,7 @@ def color_gradient(img):
 
     if PRINT_STAGES:
         rgb = cv2.cvtColor(hls, cv2.COLOR_HLS2RGB)
-        cv2.imwrite('color.jpg', rgb)
+        cv2.imwrite(os.path.join(IMAGE_FOLDER, 'color.jpg'), rgb)
 
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
@@ -233,24 +243,25 @@ def fit_polynomial(binary_warped):
         plt.plot(right_fitx, ploty, color='yellow')
         plt.xlim(0, out_img.shape[1])
         plt.ylim(out_img.shape[0], 0)
-        fig.savefig('polynom.jpg')
+        fig.savefig(os.path.join(IMAGE_FOLDER, 'polynom.jpg'))
         plt.close(fig)
 
     return ploty, left_fit, right_fit, left_fitx, right_fitx
 
 
-def measure_curvature_pixels(ploty, left_fit, right_fit):
+def measure_curvature_meters(ploty, left_fit, right_fit):
     y_eval = np.max(ploty)
 
-    a_left = left_fit[0]
-    b_left = left_fit[1]
-    a_right = right_fit[0]
-    b_right = right_fit[1]
+    a_left = MX / (MY ** 2) * left_fit[0]
+    b_left = (MX / MY) * left_fit[1]
+    a_right = MX / (MY ** 2) * right_fit[0]
+    b_right = (MX / MY) * right_fit[1]
 
     left_radius = (1 + (2 * a_left * y_eval + b_left) ** 2) ** (3 / 2) / np.abs(2 * a_left)
     right_radius = (1 + (2 * a_right * y_eval + b_right) ** 2) ** (3 / 2) / np.abs(2 * a_right)
 
-    return left_radius, right_radius
+    avg_radius = (left_radius + right_radius) / 2
+    return avg_radius
 
 
 def print_lane(undist, warped, ploty, left_fitx, right_fitx, transform):
@@ -281,13 +292,13 @@ def find_lane(img):
     # Filter the image by gradient and color
     combined_binary = color_gradient(undist)
     if PRINT_STAGES:
-        print_binary(combined_binary, 'filtered.jpg')
+        print_binary(combined_binary, os.path.join(IMAGE_FOLDER, 'filtered.jpg'))
 
     # Warp the image to the bird's eye view
     transform = perspective_transform()
     warped_binary = transform.transform(combined_binary)
     if PRINT_STAGES:
-        print_binary(warped_binary, 'warped.jpg')
+        print_binary(warped_binary, os.path.join(IMAGE_FOLDER, 'warped.jpg'))
 
     # Find the lines
     ploty, left_fit, right_fit, left_fitx, right_fitx = fit_polynomial(warped_binary)
@@ -295,15 +306,27 @@ def find_lane(img):
     # Draw the lane onto the image
     lane_img = print_lane(undist, warped_binary, ploty, left_fitx, right_fitx, transform)
 
-    # Calculate the line radii
-    #left_radius, right_radius = measure_curvature_pixels(ploty, left_fit, right_fit)
+    # Calculate the lane radius
+    lane_radius = measure_curvature_meters(ploty, left_fit, right_fit)
+    pil_image = Image.fromarray(lane_img)
+    ImageDraw.Draw(pil_image).text((200, 20), 'Radius: {:.0f}m'.format(lane_radius), TEXT_COLOR, TEXT_FONT)
+    lane_img = np.array(pil_image)
+
     #print('Left radius: {:.0f}m, Right radius: {:.0f}m'.format(left_radius, right_radius))
 
     return lane_img
 
 
+# ----- TEST CODE -----
+#calibration = calibrate_camera()
+#img = cv2.imread('TestImages/straight_lines1.jpg')
+#lane = find_lane(img)
+#cv2.imwrite('Output.jpg', lane)
+#exit(0)
+
 
 # ----- MAIN CODE -----
+
 
 # Calibrate the camera
 calibration = calibrate_camera()
