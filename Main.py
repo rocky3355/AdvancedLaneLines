@@ -11,10 +11,10 @@ from moviepy.editor import VideoFileClip
 
 PRINT_STAGES = False
 IMAGE_FOLDER = 'OutputImages'
-TEXT_FONT = ImageFont.truetype('Fonts/Arial.ttf', 25)
+TEXT_FONT = ImageFont.truetype('Fonts/arial.ttf', 25)
 TEXT_COLOR = (255, 255, 255)
 LANE_WIDTH_M = 3.7
-MY = 20.0 / 720.0
+MY = 25.0 / 720.0
 MX = LANE_WIDTH_M / 900.0
 
 
@@ -252,10 +252,15 @@ def fit_polynomial(binary_warped):
 def measure_curvature_meters(ploty, left_fit, right_fit):
     y_eval = np.max(ploty)
 
-    a_left = MX / (MY ** 2) * left_fit[0]
-    b_left = (MX / MY) * left_fit[1]
-    a_right = MX / (MY ** 2) * right_fit[0]
-    b_right = (MX / MY) * right_fit[1]
+    #a_left = MX / (MY ** 2) * left_fit[0]
+    #b_left = (MX / MY) * left_fit[1]
+    #a_right = MX / (MY ** 2) * right_fit[0]
+    #b_right = (MX / MY) * right_fit[1]
+
+    a_left = left_fit[0]
+    b_left = left_fit[1]
+    a_right = right_fit[0]
+    b_right = right_fit[1]
 
     left_radius = (1 + (2 * a_left * y_eval + b_left) ** 2) ** (3 / 2) / np.abs(2 * a_left)
     right_radius = (1 + (2 * a_right * y_eval + b_right) ** 2) ** (3 / 2) / np.abs(2 * a_right)
