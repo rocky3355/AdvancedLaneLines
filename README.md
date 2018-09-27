@@ -32,7 +32,7 @@ Numpy is used to fit polynomials onto the found line pixels. This helps to predi
 ![](OutputImages/polynom.jpg)
 
 ##### 6. Drawing the lane
-Finally, the lane can be drawn onto the undistorted input image. The output of the *project_video.mp4* can be found in *output.mp4*. The lane radius is gathered by computing both radii of the left and right line and then taking the average of both. For converting this value into meters, the factors 3.7m/900px for horizontal and 30m/720px for vertical resolution are used. I found the values by examining the warped lines. The pixel values can be determined pretty accurate and the default lane width in the US is 3.7m. The only thing to guess was the captured lane width, I guessed it to be roughly 30m.
+Finally, the lane can be drawn onto the undistorted input image. The output of the *project_video.mp4* can be found in *output.mp4*. The lane radius is gathered by computing both radii of the left and right line and then taking the average of both. For converting this value into meters, the factors 3.7m/900px for horizontal and 30m/720px for vertical resolution are used. I found the values by examining the warped lines. The pixel values can be determined pretty accurate and the default lane width in the US is 3.7m. The only thing to guess was the captured lane length, I guessed it to be roughly 30m.
 ![](OutputImages/lane.jpg)
 
 ## 2. Discussion
