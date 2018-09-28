@@ -260,8 +260,8 @@ def measure_curvature_meters(ploty, left_fit, right_fit):
     a_right = MX / (MY ** 2) * right_fit[0]
     b_right = (MX / MY) * right_fit[1]
 
-    left_radius = (1 + (2 * a_left * y_eval + b_left) ** 2) ** (3 / 2) / np.abs(2 * a_left)
-    right_radius = (1 + (2 * a_right * y_eval + b_right) ** 2) ** (3 / 2) / np.abs(2 * a_right)
+    left_radius = (1 + (2 * a_left * y_eval * MY + b_left) ** 2) ** (3 / 2) / np.abs(2 * a_left)
+    right_radius = (1 + (2 * a_right * y_eval * MY + b_right) ** 2) ** (3 / 2) / np.abs(2 * a_right)
 
     avg_radius = (left_radius + right_radius) / 2
     return avg_radius
@@ -322,7 +322,7 @@ def find_lane(img):
 # ----- TEST CODE -----
 #calibration = calibrate_camera()
 #print_calibration(calibration)
-#img = cv2.imread('TestImages/test2.jpg')
+#img = cv2.imread('TestImages/test3.jpg')
 #lane = find_lane(img)
 #cv2.imwrite(os.path.join(IMAGE_FOLDER, 'lane.jpg'), lane)
 #exit(0)
